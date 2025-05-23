@@ -26,7 +26,7 @@ def button_pressed():
     e = open("config/what.txt","r")
     what = e.readline() # 맥 윈도우 구분
     e.close()
-    e = open("config/ink.txt","r")
+    e = open("config/link.txt","r")
     link = e.readlines()
     maclink=link[0].strip()
     windowslink = link[1].strip()
