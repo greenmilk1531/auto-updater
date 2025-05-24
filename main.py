@@ -50,11 +50,14 @@ def button_pressed():
     label2 = customtkinter.CTkLabel(master=app,text="임시 파일을 삭제중입니다.. 프로그램을 끄지 말아주세요")
     label2.grid(row=0,column=0,padx=10,pady=30)
     os.remove("game.zip")
+    label2 = customtkinter.CTkLabel(master=app,text="게임 실행 중입니다.. ")
+    label2.grid(row=0,column=0,padx=10,pady=30)
+    app.after(100)
     if what == "windows":
         response2 = requests.get(url3)
         response.raise_for_status()
-        os.system("main-game/",response2)
-        app.after(2000,exit)
+        os.system(f"main-game/{response2}")
+        exit()
     else:
         app.after(2000,exit)
 def chack():
