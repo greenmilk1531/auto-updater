@@ -56,7 +56,8 @@ def button_pressed():
     if what == "windows":
         response2 = requests.get(url3)
         response.raise_for_status()
-        os.system(f"main-game/{response2}")
+        print(response2.text)
+        os.system(f"main-game/{response2.text}")
         exit()
     else:
         app.after(2000,exit)
