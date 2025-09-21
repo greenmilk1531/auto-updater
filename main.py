@@ -1,125 +1,91 @@
 import numpy as np
-from scipy.io.wavfile import read
-from scipy.fft import fft
+from scipy.io.wavfile import write
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
+def bytes_to_bits(data: bytes) -> str:
+    return ''.join(f'{byte:08b}' for byte in data)
 
-def decode_freq_to_2bits(freq):
-    if 400 < freq < 600:
-        return '00'
-    elif 800 < freq < 1200:
-        return '01'
-    elif 1300 < freq < 1700:
-        return '10'
-    elif 1800 < freq < 2200:
-        return '11'
-    else:
-        return None
+def encode_2bits_to_freq(bits):
+    freq_map = {
+        '00': 500,
+        '01': 1000,
+        '10': 1500,
+        '11': 2000
+    }
+    return freq_map[bits]
 
+def generate_tone(freq, sample_rate, duration):
+    t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+    return 0.5 * np.sin(2 * np.pi * freq * t)
 
-def get_dominant_freq(chunk, sample_rate):
-    freqs = np.fft.fftfreq(len(chunk), 1 / sample_rate)
-    magnitudes = np.abs(fft(chunk))
-    peak_idx = np.argmax(magnitudes)
-    return abs(freqs[peak_idx])
+def encode_file_to_mfsk_wav(input_path, output_wav):
+    sample_rate = 44100
+    duration = 0.002  # per 2 bits
 
+    with open(input_path, 'rb') as f:
+        file_data = f.read()
 
-def bits_to_bytes(bits: str) -> bytes:
-    byte_list = []
-    for i in range(0, len(bits), 8):
-        byte = bits[i:i + 8]
-        if len(byte) == 8:
-            byte_list.append(int(byte, 2))
-    return bytes(byte_list)
+    bits = bytes_to_bits(file_data)
+    if len(bits) % 2 != 0:
+        bits += '0'  # 패딩
 
+    audio = []
+    for i in range(0, len(bits), 2):
+        pair = bits[i:i+2]
+        freq = encode_2bits_to_freq(pair)
+        audio.append(generate_tone(freq, sample_rate, duration))
 
-def decode_mfsk_wav_to_file(input_wav, output_file):
-    sample_rate, data = read(input_wav)
-    if data.ndim > 1:
-        data = data[:, 0]  # convert to mono
+    waveform = np.concatenate(audio)
+    waveform_int16 = np.int16(waveform * 32767)
+    write(output_wav, sample_rate, waveform_int16)
 
-    duration = 0.002  # chunk duration for 2 bits
-    samples_per_chunk = int(sample_rate * duration)
+class MFSKEncoderApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("MFSK File to Audio Encoder")
 
-    bits = ''
-    for i in range(0, len(data), samples_per_chunk):
-        chunk = data[i:i + samples_per_chunk]
-        if len(chunk) < samples_per_chunk:
-            break
-        freq = get_dominant_freq(chunk, sample_rate)
-        b = decode_freq_to_2bits(freq)
-        if b:
-            bits += b
+        self.input_path = None
+        self.output_path = None
 
-    file_bytes = bits_to_bytes(bits)
-
-    with open(output_file, 'wb') as f:
-        f.write(file_bytes)
-
-    return len(file_bytes)
-
-
-# ----------------------- GUI -----------------------
-
-class MFSKDecoderApp:
-    def __init__(self, master):
-        self.master = master
-        master.title("MFSK WAV Decoder")
-
-        self.input_file = ''
-        self.output_file = ''
-
-        self.label = tk.Label(master, text="MFSK WAV to File Decoder", font=("Arial", 14))
+        self.label = tk.Label(self, text="Select file to encode")
         self.label.pack(pady=10)
 
-        self.select_input_btn = tk.Button(master, text="1. Select WAV File", command=self.select_input_file)
-        self.select_input_btn.pack(pady=5)
+        self.btn_select = tk.Button(self, text="Select Input File", command=self.select_input_file)
+        self.btn_select.pack(pady=5)
 
-        self.select_output_btn = tk.Button(master, text="2. Choose Output File", command=self.select_output_file)
-        self.select_output_btn.pack(pady=5)
+        self.btn_save = tk.Button(self, text="Select Output WAV", command=self.select_output_file)
+        self.btn_save.pack(pady=5)
 
-        self.decode_btn = tk.Button(master, text="3. Decode", command=self.decode, state=tk.DISABLED)
-        self.decode_btn.pack(pady=10)
-
-        self.status_label = tk.Label(master, text="", fg="blue")
-        self.status_label.pack(pady=5)
+        self.btn_encode = tk.Button(self, text="Encode to MFSK WAV", command=self.encode)
+        self.btn_encode.pack(pady=20)
 
     def select_input_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("WAV Files", "*.wav")])
-        if file_path:
-            self.input_file = file_path
-            self.update_status(f"Selected input: {file_path}")
-            self.check_ready()
+        path = filedialog.askopenfilename(title="Select file to encode")
+        if path:
+            self.input_path = path
+            self.label.config(text=f"Input: {path}")
 
     def select_output_file(self):
-        file_path = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text Files", "*.txt")])
-        if file_path:
-            self.output_file = file_path
-            self.update_status(f"Selected output: {file_path}")
-            self.check_ready()
+        path = filedialog.asksaveasfilename(defaultextension=".wav", filetypes=[("WAV files","*.wav")], title="Save output as")
+        if path:
+            self.output_path = path
+            self.label.config(text=f"Output: {path}")
 
-    def check_ready(self):
-        if self.input_file and self.output_file:
-            self.decode_btn.config(state=tk.NORMAL)
+    def encode(self):
+        if not self.input_path:
+            messagebox.showwarning("Warning", "Please select an input file first!")
+            return
+        if not self.output_path:
+            messagebox.showwarning("Warning", "Please select output WAV filename!")
+            return
 
-    def update_status(self, msg):
-        self.status_label.config(text=msg)
-
-    def decode(self):
         try:
-            self.update_status("Decoding...")
-            num_bytes = decode_mfsk_wav_to_file(self.input_file, self.output_file)
-            self.update_status(f"Done: {num_bytes} bytes written to '{self.output_file}'")
-            messagebox.showinfo("Success", f"Decoded {num_bytes} bytes to:\n{self.output_file}")
+            encode_file_to_mfsk_wav(self.input_path, self.output_path)
+            messagebox.showinfo("Success", f"File encoded and saved to:\n{self.output_path}")
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to decode:\n{str(e)}")
-            self.update_status("Error during decoding.")
+            messagebox.showerror("Error", f"Failed to encode:\n{str(e)}")
 
-
-# -------------------- Main Program --------------------
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = MFSKDecoderApp(root)
-    root.geometry("400x250")
-    root.mainloop()
+    app = MFSKEncoderApp()
+    app.mainloop()
