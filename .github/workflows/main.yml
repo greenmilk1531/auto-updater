@@ -19,7 +19,7 @@ jobs:
 
       - name: 📦 Install dependencies
         run: |
-          pip install requests customtkinter pyinstaller
+          pip install requests customtkinter pyinstaller minio
 
       - name: 🛠️ Build EXE with PyInstaller
         run: |
